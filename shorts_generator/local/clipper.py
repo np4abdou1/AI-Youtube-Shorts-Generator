@@ -74,26 +74,30 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
 
     last_center: Optional[Tuple[int, int]] = None
     smoothing = 0.15  # how aggressively to chase a new face position
+    frame_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
-        if len(faces) > 0:
-            # Pick the largest face — usually the speaker.
-            x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-            cx = x + w // 2
-            cy = y + h // 2
-            if last_center is None:
-                last_center = (cx, cy)
-            else:
-                lx, ly = last_center
-                last_center = (
-                    int(lx + (cx - lx) * smoothing),
-                    int(ly + (cy - ly) * smoothing),
-                )
+        if frame_count % 5 == 0:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+            if len(faces) > 0:
+                # Pick the largest face — usually the speaker.
+                x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+                cx = x + w // 2
+                cy = y + h // 2
+                if last_center is None:
+                    last_center = (cx, cy)
+                else:
+                    lx, ly = last_center
+                    last_center = (
+                        int(lx + (cx - lx) * smoothing),
+                        int(ly + (cy - ly) * smoothing),
+                    )
+        frame_count += 1
+
         if last_center is None:
             last_center = (src_w // 2, src_h // 2)
 

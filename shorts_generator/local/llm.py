@@ -2,6 +2,7 @@
 from ..config import (
     GEMINI_MODEL,
     LLM_PROVIDER,
+    OPENAI_BASE_URL,
     OPENAI_MODEL,
     require_gemini_key,
     require_openai_key,
@@ -10,6 +11,8 @@ from ..config import (
 
 def call_openai_llm(prompt: str) -> str:
     """OpenAI Chat Completions backend used by --mode local."""
+    import os
+    import httpx
     try:
         from openai import OpenAI  # type: ignore
     except ImportError as e:
@@ -18,7 +21,15 @@ def call_openai_llm(prompt: str) -> str:
             "    pip install -r requirements-local.txt"
         ) from e
 
-    client = OpenAI(api_key=require_openai_key())
+    kwargs = {"api_key": require_openai_key()}
+    if OPENAI_BASE_URL:
+        kwargs["base_url"] = OPENAI_BASE_URL
+
+    proxy_url = os.environ.get("ALL_PROXY") or os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY")
+    if proxy_url:
+        kwargs["http_client"] = httpx.Client(proxy=proxy_url)
+
+    client = OpenAI(**kwargs)
     response = client.chat.completions.create(
         model=OPENAI_MODEL,
         temperature=0.7,
