@@ -23,6 +23,12 @@ drive.mount('/content/drive')
 
 ### Cell 3: Install GPU-Accelerated & Local Dependencies
 ```bash
+# Install system-wide Deno to solve YouTube JS challenge signatures automatically
+!curl -fsSL https://deno.land/install.sh | sh
+import os
+os.environ["PATH"] += ":/root/.deno/bin"
+
+# Install Python packages
 !pip install yt-dlp faster-whisper openai google-genai opencv-python-headless socksio httpx[socks]
 ```
 
