@@ -119,8 +119,6 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
-        "js_runtimes": {"node": {}},
-        "remote_components": {"ejs:github": {}},
     }
     
     cookies_path = os.path.join(os.getcwd(), "cookies.txt")
