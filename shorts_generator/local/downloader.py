@@ -129,6 +129,13 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
             with open(cookies_json_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             temp_cookies = os.path.join(out_dir, "cookies_converted.txt")
+            # If the file already exists, remove it first to bypass read-only lock
+            if os.path.exists(temp_cookies):
+                try:
+                    os.chmod(temp_cookies, 0o666)
+                    os.remove(temp_cookies)
+                except Exception:
+                    pass
             netscape = "# Netscape HTTP Cookie File\n"
             for c in cookies:
                 domain = c.get("domain", "")
@@ -141,6 +148,8 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
                 netscape += f"{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{value}\n"
             with open(temp_cookies, "w", encoding="utf-8") as f:
                 f.write(netscape)
+            # Make the file read-only so yt-dlp cannot overwrite/corrupt it
+            os.chmod(temp_cookies, 0o444)
             ydl_opts["cookiefile"] = temp_cookies
             print("[download/local] loaded and converted cookies.json", flush=True)
         except Exception as e:
