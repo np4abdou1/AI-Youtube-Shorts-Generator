@@ -116,16 +116,15 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
             print(f"[download/local] reusing cached download: {cached}", flush=True)
             return cached
 
-    print(f"[download/local] {video_url} @ {fmt}p → {out_dir}/", flush=True)
-    ydl_opts = {
-        "format": _format_for(fmt),
-        "outtmpl": os.path.join(out_dir, "source_%(id)s.%(ext)s"),
-        "merge_output_format": "mp4",
-        "quiet": True,
-        "no_warnings": True,
-        "noprogress": True,
-    }
+    import subprocess
+    cmd = [
+        "python3", "-m", "yt_dlp",
+        "--format", _format_for(fmt),
+        "--merge-output-format", "mp4",
+        "--output", os.path.join(out_dir, "source_%(id)s.%(ext)s"),
+    ]
     
+    cookies_to_use = None
     cookies_path = os.path.join(os.getcwd(), "cookies.txt")
     cookies_json_path = os.path.join(os.getcwd(), "cookies.json")
     if os.path.exists(cookies_json_path):
@@ -134,7 +133,6 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
             with open(cookies_json_path, "r", encoding="utf-8") as f:
                 cookies = json.load(f)
             temp_cookies = os.path.join(out_dir, "cookies_converted.txt")
-            # If the file already exists, remove it first to bypass read-only lock
             if os.path.exists(temp_cookies):
                 try:
                     os.chmod(temp_cookies, 0o666)
@@ -153,27 +151,32 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
                 netscape += f"{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{value}\n"
             with open(temp_cookies, "w", encoding="utf-8") as f:
                 f.write(netscape)
-            # Make the file read-only so yt-dlp cannot overwrite/corrupt it
             os.chmod(temp_cookies, 0o444)
-            ydl_opts["cookiefile"] = temp_cookies
+            cookies_to_use = temp_cookies
             print("[download/local] loaded and converted cookies.json", flush=True)
         except Exception as e:
             print(f"[download/local] warning: failed to parse cookies.json: {e}", flush=True)
             if os.path.exists(cookies_path):
-                ydl_opts["cookiefile"] = cookies_path
+                cookies_to_use = cookies_path
     elif os.path.exists(cookies_path):
-        ydl_opts["cookiefile"] = cookies_path
+        cookies_to_use = cookies_path
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(video_url, download=True)
-        path = ydl.prepare_filename(info)
-        # merge_output_format may rename the extension after merge
-        if not os.path.exists(path):
-            stem, _ = os.path.splitext(path)
-            for ext in (".mp4", ".mkv", ".webm"):
-                if os.path.exists(stem + ext):
-                    path = stem + ext
-                    break
+    if cookies_to_use:
+        cmd.extend(["--cookies", cookies_to_use])
+
+    cmd.append(video_url)
+    
+    print(f"[download/local] downloading with command: {' '.join(cmd)}", flush=True)
+    subprocess.run(cmd, check=True)
+    
+    # Locate the downloaded file
+    path = os.path.join(out_dir, f"source_{video_id}.mp4")
+    if not os.path.exists(path):
+        stem = os.path.join(out_dir, f"source_{video_id}")
+        for ext in (".mp4", ".mkv", ".webm"):
+            if os.path.exists(stem + ext):
+                path = stem + ext
+                break
 
     print(f"[download/local] ready: {path}", flush=True)
     return path
