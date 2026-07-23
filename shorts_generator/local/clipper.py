@@ -66,7 +66,24 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
     crop_w = max(2, crop_w - (crop_w % 2))
     crop_h = max(2, crop_h - (crop_h % 2))
 
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    import torch
+    use_gpu = torch.cuda.is_available()
+    mtcnn = None
+    face_cascade = None
+
+    if use_gpu:
+        try:
+            from facenet_pytorch import MTCNN
+            device = torch.device('cuda')
+            mtcnn = MTCNN(keep_all=False, device=device, select_largest=True)
+            print("[clip/local] using PyTorch MTCNN on GPU (CUDA) for face tracking", flush=True)
+        except ImportError:
+            print("[clip/local] facenet-pytorch not installed, falling back to CPU face tracking", flush=True)
+            use_gpu = False
+
+    if not use_gpu:
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        print("[clip/local] using OpenCV CascadeClassifier on CPU for face tracking", flush=True)
 
     silent_path = out_path + ".silent.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -74,13 +91,20 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
 
     last_center: Optional[Tuple[int, int]] = None
     smoothing = 0.15  # how aggressively to chase a new face position
-    frame_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        if frame_count % 5 == 0:
+        cx, cy = None, None
+        if use_gpu and mtcnn is not None:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            boxes, _ = mtcnn.detect(rgb_frame)
+            if boxes is not None and len(boxes) > 0:
+                x1, y1, x2, y2 = boxes[0]
+                cx = int((x1 + x2) / 2)
+                cy = int((y1 + y2) / 2)
+        elif face_cascade is not None:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
             if len(faces) > 0:
@@ -88,15 +112,16 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
                 x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
                 cx = x + w // 2
                 cy = y + h // 2
-                if last_center is None:
-                    last_center = (cx, cy)
-                else:
-                    lx, ly = last_center
-                    last_center = (
-                        int(lx + (cx - lx) * smoothing),
-                        int(ly + (cy - ly) * smoothing),
-                    )
-        frame_count += 1
+
+        if cx is not None and cy is not None:
+            if last_center is None:
+                last_center = (cx, cy)
+            else:
+                lx, ly = last_center
+                last_center = (
+                    int(lx + (cx - lx) * smoothing),
+                    int(ly + (cy - ly) * smoothing),
+                )
 
         if last_center is None:
             last_center = (src_w // 2, src_h // 2)

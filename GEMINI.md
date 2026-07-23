@@ -29,7 +29,7 @@ import os
 os.environ["PATH"] += ":/root/.deno/bin"
 
 # Install Python packages
-!pip install yt-dlp faster-whisper openai google-genai opencv-python-headless socksio httpx[socks]
+!pip install yt-dlp faster-whisper openai google-genai opencv-python-headless socksio httpx[socks] facenet-pytorch
 ```
 
 ### Cell 4: Create Configuration (`.env`)
