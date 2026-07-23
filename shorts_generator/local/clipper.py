@@ -90,15 +90,16 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
     writer = cv2.VideoWriter(silent_path, fourcc, fps, (crop_w, crop_h))
 
     last_center: Optional[Tuple[int, int]] = None
-    smoothing = 0.15  # how aggressively to chase a new face position
+    target_center: Optional[Tuple[int, int]] = None
+    smoothing = 0.05  # lower = smoother tracking, higher = faster tracking
     frame_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
-        cx, cy = None, None
         if frame_count % 5 == 0:
+            cx, cy = None, None
             if use_gpu and mtcnn is not None:
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 boxes, _ = mtcnn.detect(rgb_frame)
@@ -114,17 +115,24 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
                     x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
                     cx = x + w // 2
                     cy = y + h // 2
+            
+            if cx is not None and cy is not None:
+                target_center = (cx, cy)
+
         frame_count += 1
 
-        if cx is not None and cy is not None:
-            if last_center is None:
-                last_center = (cx, cy)
-            else:
-                lx, ly = last_center
-                last_center = (
-                    int(lx + (cx - lx) * smoothing),
-                    int(ly + (cy - ly) * smoothing),
-                )
+        if target_center is None:
+            target_center = (src_w // 2, src_h // 2)
+
+        if last_center is None:
+            last_center = target_center
+        else:
+            lx, ly = last_center
+            tx, ty = target_center
+            last_center = (
+                int(lx + (tx - lx) * smoothing),
+                int(ly + (ty - ly) * smoothing),
+            )
 
         if last_center is None:
             last_center = (src_w // 2, src_h // 2)
