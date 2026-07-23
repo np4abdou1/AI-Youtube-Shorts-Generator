@@ -91,13 +91,13 @@ def _reframe_vertical(
     """Crop the cut clip to the target aspect ratio, tracking faces if possible."""
     try:
         import cv2  # type: ignore
+        import numpy as np
     except ImportError as e:
         raise RuntimeError(
-            "opencv-python is required for --mode local. Install it with:\n"
+            "opencv-python/numpy is required for --mode local. Install it with:\n"
             "    pip install -r requirements-local.txt"
         ) from e
 
-    target_ratio = _ratio(aspect_ratio)
     cap = cv2.VideoCapture(in_path)
     if not cap.isOpened():
         raise RuntimeError(f"could not open {in_path}")
@@ -106,15 +106,16 @@ def _reframe_vertical(
     src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
 
-    # Compute the largest crop that fits inside the frame at the target ratio.
-    if target_ratio < src_w / src_h:
-        crop_h = src_h
-        crop_w = int(crop_h * target_ratio)
-    else:
-        crop_w = src_w
-        crop_h = int(crop_w / target_ratio)
-    crop_w = max(2, crop_w - (crop_w % 2))
-    crop_h = max(2, crop_h - (crop_h % 2))
+    # Cinematic Crop Sizing:
+    # We crop the original frame to a 1:1 square that tracks the speaker.
+    crop_w = min(src_w, src_h)
+    crop_h = crop_w
+
+    # The final output frame is 9:16 (black bars on top and bottom of the 1:1 square)
+    out_w = crop_w
+    out_h = int(out_w / (9.0 / 16.0))
+    out_w = max(2, out_w - (out_w % 2))
+    out_h = max(2, out_h - (out_h % 2))
 
     import torch
     use_gpu = torch.cuda.is_available()
@@ -137,12 +138,17 @@ def _reframe_vertical(
 
     silent_path = out_path + ".silent.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(silent_path, fourcc, fps, (crop_w, crop_h))
+    writer = cv2.VideoWriter(silent_path, fourcc, fps, (out_w, out_h))
 
     last_center: Optional[Tuple[int, int]] = None
     target_center: Optional[Tuple[int, int]] = None
     smoothing = 0.05  # lower = smoother tracking, higher = faster tracking
     frame_count = 0
+
+    # Cooldown setup to prevent rapid camera cutting (hold camera for 2.0s minimum)
+    cooldown_frames = int(fps * 2.0)
+    frames_since_cut = cooldown_frames
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -167,7 +173,22 @@ def _reframe_vertical(
                     cy = y + h // 2
             
             if cx is not None and cy is not None:
-                target_center = (cx, cy)
+                if last_center is not None:
+                    lx, ly = last_center
+                    distance = ((cx - lx) ** 2 + (cy - ly) ** 2) ** 0.5
+                    # Trigger instant cut only if we are past the cooldown window
+                    if distance > (crop_w // 3):
+                        if frames_since_cut >= cooldown_frames:
+                            target_center = (cx, cy)
+                            last_center = target_center
+                            frames_since_cut = 0
+                    else:
+                        target_center = (cx, cy)
+                else:
+                    target_center = (cx, cy)
+
+        frame_count += 1
+        frames_since_cut += 1
 
         if target_center is None:
             target_center = (src_w // 2, src_h // 2)
@@ -177,49 +198,49 @@ def _reframe_vertical(
         else:
             lx, ly = last_center
             tx, ty = target_center
-            distance = ((tx - lx) ** 2 + (ty - ly) ** 2) ** 0.5
-            if distance > (crop_w // 3):
-                last_center = target_center
-            else:
-                last_center = (
-                    int(lx + (tx - lx) * smoothing),
-                    int(ly + (ty - ly) * smoothing),
-                )
+            last_center = (
+                int(lx + (tx - lx) * smoothing),
+                int(ly + (ty - ly) * smoothing),
+            )
 
         cx, cy = last_center
         x0 = max(0, min(src_w - crop_w, cx - crop_w // 2))
         y0 = max(0, min(src_h - crop_h, cy - crop_h // 2))
         cropped = frame[y0:y0 + crop_h, x0:x0 + crop_w]
 
+        # Create a black 9:16 canvas and paste the square crop centered vertically
+        canvas = np.zeros((out_h, out_w, 3), dtype=np.uint8)
+        y_offset = (out_h - crop_h) // 2
+        canvas[y_offset:y_offset + crop_h, 0:out_w] = cropped
+
         # Draw dynamic subtitles if transcript is available
         if transcript:
-            current_time = start_time + (frame_count / fps)
+            # Use millisecond container position to maintain perfect sync
+            current_time = start_time + (cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
             sub_text = _get_subtitle_text(transcript, current_time)
             if sub_text:
                 wrapped = _wrap_text(sub_text, max_chars=18)
                 font_face = cv2.FONT_HERSHEY_DUPLEX
-                # Scale dynamically based on resolution
-                font_scale = crop_w / 360.0 * 0.8
+                # Scale based on output width
+                font_scale = out_w / 360.0 * 0.8
                 thickness = max(1, int(font_scale * 2))
                 outline_thickness = max(1, int(font_scale * 3))
                 
-                # Render captions centered horizontally and placed at 70% height
-                base_y = int(crop_h * 0.70)
+                # Render captions centered in the black bar region or lower video area
+                base_y = int(out_h * 0.80)
                 line_height = int(35 * font_scale)
                 for line_idx, line in enumerate(wrapped):
                     text_size, _ = cv2.getTextSize(line, font_face, font_scale, thickness)
                     text_w, text_h = text_size
-                    x_org = max(10, (crop_w - text_w) // 2)
+                    x_org = max(10, (out_w - text_w) // 2)
                     y_org = base_y + line_idx * line_height
-                    # Use vibrant yellow color (BGR: 0, 255, 255)
                     _draw_styled_text(
-                        cropped, line, (x_org, y_org),
+                        canvas, line, (x_org, y_org),
                         font_face, font_scale, (0, 255, 255),
                         thickness, outline_thickness
                     )
 
-        writer.write(cropped)
-        frame_count += 1
+        writer.write(canvas)
 
     cap.release()
     writer.release()
