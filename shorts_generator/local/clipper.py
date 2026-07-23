@@ -8,6 +8,7 @@ Two stages per highlight:
 """
 import os
 import subprocess
+import re
 from typing import Dict, List, Optional, Tuple
 
 from ..config import LOCAL_OUTPUT_DIR
@@ -376,6 +377,99 @@ def _reframe_vertical(
     return out_path
 
 
+def _upload_to_youtube(file_path: str, title: str, description: str):
+    import os
+    client_id = os.environ.get("YOUTUBE_CLIENT_ID")
+    client_secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    refresh_token = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+    rules = os.environ.get("YOUTUBE_RULES", "")
+
+    if not client_id or not client_secret or not refresh_token:
+        print("\033[93m[clip/local] YouTube credentials not set. Skipping upload.\033[0m", flush=True)
+        return
+
+    try:
+        from google.oauth2.credentials import Credentials  # type: ignore
+        from googleapiclient.discovery import build  # type: ignore
+        from googleapiclient.http import MediaFileUpload  # type: ignore
+    except ImportError:
+        print("\033[91m[clip/local] Warning: google-api-python-client or google-auth not installed. Skipping upload.\033[0m", flush=True)
+        return
+
+    final_title = title
+    final_description = description
+
+    # Extract hashtags and tags from rules
+    hashtags = re.findall(r"#[a-zA-Z0-9_]+", rules)
+    tags = re.findall(r"@[a-zA-Z0-9_]+", rules)
+
+    clean_rules = rules
+    for ht in hashtags:
+        clean_rules = clean_rules.replace(ht, "")
+    for tg in tags:
+        clean_rules = clean_rules.replace(tg, "")
+    clean_rules = clean_rules.strip()
+
+    if "#shorts" not in final_title.lower():
+        final_title += " #shorts"
+    for ht in hashtags:
+        if ht.lower() not in final_title.lower():
+            final_title += f" {ht}"
+            
+    if len(final_title) > 100:
+        final_title = final_title[:97] + "..."
+
+    desc_lines = [final_description]
+    if tags:
+        desc_lines.append(" ".join(tags))
+    if clean_rules:
+        desc_lines.append(f"\nRules applied:\n{clean_rules}")
+    final_description = "\n\n".join(desc_lines)
+
+    print(f"\033[92m[clip/local] Uploading to YouTube channel (@ghclip1) as Short...\033[0m", flush=True)
+    print(f"  Title: {final_title}", flush=True)
+    
+    try:
+        creds = Credentials(
+            token=None,
+            refresh_token=refresh_token,
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id=client_id,
+            client_secret=client_secret
+        )
+        youtube = build("youtube", "v3", credentials=creds)
+        
+        body = {
+            "snippet": {
+                "title": final_title,
+                "description": final_description,
+                "categoryId": "22"
+            },
+            "status": {
+                "privacyStatus": "public",
+                "selfDeclaredMadeForKids": False
+            }
+        }
+        
+        media = MediaFileUpload(file_path, chunksize=-1, resumable=True, mimetype="video/mp4")
+        request = youtube.videos().insert(
+            part="snippet,status",
+            body=body,
+            media_body=media
+        )
+        
+        response = None
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                print(f"  Upload progress: {int(status.progress() * 100)}%", flush=True)
+                
+        video_id = response.get("id")
+        print(f"\033[92m\033[1m[clip/local] Success! Uploaded as Short. Video Link: https://youtu.be/{video_id}\033[0m", flush=True)
+    except Exception as e:
+        print(f"\033[91m[clip/local] YouTube Upload Failed: {e}\033[0m", flush=True)
+
+
 def crop_clip_local(
     source_path: str,
     start_time: float,
@@ -418,6 +512,12 @@ def crop_highlights_local(
                 out_path,
                 transcript=transcript,
                 top_bar_hook=h.get("top_bar_hook", "WAIT FOR IT..."),
+            )
+            # Upload clip to YouTube immediately
+            _upload_to_youtube(
+                file_path=out_path,
+                title=h.get("title", "YouTube Short"),
+                description=h.get("virality_reason", "Awesome Short Video")
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
