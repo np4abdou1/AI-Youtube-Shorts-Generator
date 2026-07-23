@@ -28,14 +28,14 @@ Respond with JSON only: {"content_type": "...", "density": "..."}"""
 
 VIRALITY_CRITERIA = """
 Virality signals to prioritize (ranked by impact):
-1. HOOK MOMENTS — statements that create immediate curiosity ("The secret is...", "Nobody talks about...", "I was completely wrong about...")
-2. EMOTIONAL PEAKS — genuine surprise, laughter, anger, vulnerability, excitement; raw unscripted reactions
-3. OPINION BOMBS — strong, polarizing or counter-intuitive statements that trigger agree/disagree
-4. REVELATION MOMENTS — surprising facts, stats, or confessions that reframe how the viewer thinks
-5. CONFLICT/TENSION — disagreement, pushback, or a problem being confronted head-on
-6. QUOTABLE ONE-LINERS — a sentence that works as a standalone quote card
-7. STORY PEAKS — the climax or twist of an anecdote; the payoff moment
-8. PRACTICAL VALUE — a concrete tip, hack, or insight the viewer can immediately apply
+1. CURIOSITY GAPS — information withheld that forces the viewer to watch to the end to find out.
+2. HOOK MOMENTS — statements that create immediate shock ("The secret is...", "Nobody talks about...").
+3. EMOTIONAL PEAKS — genuine surprise, laughter, anger, vulnerability; raw unscripted reactions.
+4. OPINION BOMBS — strong, polarizing or counter-intuitive statements that trigger agree/disagree comments.
+5. REVELATION MOMENTS — surprising facts, stats, or confessions that reframe how the viewer thinks.
+6. CONFLICT/TENSION — disagreement, pushback, or a problem being confronted head-on.
+7. STORY PEAKS — the climax or twist of an anecdote; the payoff moment.
+8. PRACTICAL VALUE — a concrete tip, hack, or insight the viewer can immediately apply.
 """
 
 

@@ -30,8 +30,8 @@ def _cut_subclip(source_path: str, start: float, end: float, out_path: str) -> s
         "-i", source_path,
         "-ss", f"{start:.3f}",
         "-to", f"{end:.3f}",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "20",
-        "-c:a", "aac", "-b:a", "128k",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+        "-c:a", "aac", "-b:a", "192k",
         out_path,
     ]
     subprocess.run(cmd, check=True)
@@ -67,13 +67,24 @@ def _wrap_text(text: str, max_chars: int = 18) -> List[str]:
 
 
 def _draw_styled_text(img, text: str, org: Tuple[int, int], font_face, font_scale, color, thickness, outline_thickness):
-    # Outline (black border)
     import cv2  # type: ignore
+    
+    # Drop Shadow (Offset black text)
+    shadow_offset = max(1, int(font_scale * 3.5))
     cv2.putText(
-        img, text, org, font_face, font_scale,
+        img, text, (org[0] + shadow_offset, org[1] + shadow_offset), 
+        font_face, font_scale,
         (0, 0, 0), thickness + outline_thickness * 2,
         lineType=cv2.LINE_AA
     )
+    
+    # Outline (black border)
+    cv2.putText(
+        img, text, org, font_face, font_scale,
+        (0, 0, 0), thickness + outline_thickness,
+        lineType=cv2.LINE_AA
+    )
+    
     # Primary text
     cv2.putText(
         img, text, org, font_face, font_scale,
@@ -361,13 +372,13 @@ def _reframe_vertical(
     cap.release()
     writer.release()
 
-    # Mux audio from the cut clip back onto the silent reframed video.
+    # Mux audio from the cut clip and RE-ENCODE the silent reframed video to H.264 (Crucial for YouTube/TikTok quality)
     cmd = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", silent_path,
         "-i", in_path,
-        "-c:v", "copy",
-        "-c:a", "aac", "-b:a", "128k",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
         "-map", "0:v:0", "-map", "1:a:0?",
         "-shortest",
         out_path,
