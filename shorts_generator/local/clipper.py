@@ -149,6 +149,11 @@ def _reframe_vertical(
     cooldown_frames = int(fps * 2.0)
     frames_since_cut = cooldown_frames
 
+    # Pending face tracking to prevent switching on short "ok"/"yeah" sounds
+    pending_center: Optional[Tuple[int, int]] = None
+    pending_count = 0
+    required_consecutive_detections = 5  # 5 detections * 5 frame step = 25 frames (~0.8 seconds of speaking)
+
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -176,16 +181,35 @@ def _reframe_vertical(
                 if last_center is not None:
                     lx, ly = last_center
                     distance = ((cx - lx) ** 2 + (cy - ly) ** 2) ** 0.5
-                    # Trigger instant cut only if we are past the cooldown window
+                    
                     if distance > (crop_w // 3):
-                        if frames_since_cut >= cooldown_frames:
-                            target_center = (cx, cy)
-                            last_center = target_center
-                            frames_since_cut = 0
+                        if pending_center is not None:
+                            plx, ply = pending_center
+                            p_dist = ((cx - plx) ** 2 + (cy - ply) ** 2) ** 0.5
+                            if p_dist < (crop_w // 4):
+                                pending_count += 1
+                            else:
+                                pending_center = (cx, cy)
+                                pending_count = 1
+                        else:
+                            pending_center = (cx, cy)
+                            pending_count = 1
+                        
+                        if pending_count >= required_consecutive_detections:
+                            if frames_since_cut >= cooldown_frames:
+                                target_center = pending_center
+                                last_center = target_center
+                                frames_since_cut = 0
+                            pending_center = None
+                            pending_count = 0
                     else:
                         target_center = (cx, cy)
+                        pending_center = None
+                        pending_count = 0
                 else:
                     target_center = (cx, cy)
+            else:
+                pending_count = max(0, pending_count - 1)
 
         frame_count += 1
         frames_since_cut += 1
