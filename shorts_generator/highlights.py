@@ -57,6 +57,8 @@ Rules:
 - For each highlight, identify the single best "hook_sentence" — the opening line that would make someone stop scrolling
 - Create a highly catchy and engaging "top_bar_hook" title (max 25 characters) to be displayed on a black bar at the top of the video (e.g. "WAIT FOR IT...", "Watch until the end!", "This gets crazy...")
 - Explain in one sentence why this clip is viral ("virality_reason")
+- NEVER use em-dashes (— or --) in any of the returned fields (use standard colons or commas instead)
+- Custom YouTube metadata rules: {youtube_rules}
 
 Respond ONLY with valid JSON (no markdown, no explanation):
 {{"highlights":[{{"title":"string","start_time":float,"end_time":float,"score":int,"hook_sentence":"string","top_bar_hook":"string","virality_reason":"string"}}]}}"""
@@ -209,6 +211,11 @@ def call_highlight_api(
 ) -> Dict:
     # Ask for ~2× the user's target so dedupe has headroom, but cap so the model
     # doesn't have to generate a huge JSON payload (which times out gpt-5-mini).
+    import os
+    youtube_rules = os.environ.get("YOUTUBE_RULES", "").strip()
+    if not youtube_rules:
+        youtube_rules = "Generate engaging titles and descriptions based on the video context."
+    
     target = max(num_clips * 2, 5)
     natural_max = max(2 if is_chunk else 3, int(duration / 90))
     min_clips = min(target, natural_max, 8)
@@ -217,6 +224,7 @@ def call_highlight_api(
         content_type=content_info.get("content_type", "other"),
         density=content_info.get("density", "medium"),
         num_clips_instruction=f"Generate at least {min_clips} highlights",
+        youtube_rules=youtube_rules,
     )
     base_prompt = f"{system}\n\nTranscript:\n{transcript_text}"
     prompt = base_prompt
