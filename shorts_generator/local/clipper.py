@@ -105,10 +105,10 @@ def _draw_dynamic_captions(canvas, words: List[Dict], current_time: float, out_w
         start_win = max(0, end_win - 3)
     window_words = words[start_win:end_win]
     
-    font_face = cv2.FONT_HERSHEY_DUPLEX
-    font_scale = out_w / 360.0 * 0.95
-    thickness = max(2, int(font_scale * 2.5))
-    outline_thickness = max(2, int(font_scale * 3.5))
+    font_face = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = out_w / 360.0 * 0.70
+    thickness = max(1, int(font_scale * 2.2))
+    outline_thickness = max(1, int(font_scale * 3.2))
     
     word_sizes = []
     space_size, _ = cv2.getTextSize(" ", font_face, font_scale, thickness)
@@ -314,10 +314,10 @@ def _reframe_vertical(
                     sub_text = active_seg.get("text", "").strip()
                     if sub_text:
                         wrapped = _wrap_text(sub_text, max_chars=18)
-                        font_face = cv2.FONT_HERSHEY_DUPLEX
-                        font_scale = out_w / 360.0 * 0.8
-                        thickness = max(1, int(font_scale * 2))
-                        outline_thickness = max(1, int(font_scale * 3))
+                        font_face = cv2.FONT_HERSHEY_SIMPLEX
+                        font_scale = out_w / 360.0 * 0.70
+                        thickness = max(1, int(font_scale * 2.2))
+                        outline_thickness = max(1, int(font_scale * 3.2))
                         
                         base_y = int(out_h * 0.80)
                         line_height = int(35 * font_scale)
@@ -335,10 +335,10 @@ def _reframe_vertical(
         # Draw static top bar hook (white color: 255, 255, 255)
         if top_bar_hook:
             wrapped_top = _wrap_text(top_bar_hook.upper(), max_chars=18)
-            font_face = cv2.FONT_HERSHEY_DUPLEX
-            font_scale = out_w / 360.0 * 0.9
-            thickness = max(1, int(font_scale * 2.5))
-            outline_thickness = max(1, int(font_scale * 3.5))
+            font_face = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = out_w / 360.0 * 0.70
+            thickness = max(1, int(font_scale * 2.2))
+            outline_thickness = max(1, int(font_scale * 3.2))
             
             top_bar_height = y_offset
             line_height = int(40 * font_scale)
@@ -396,12 +396,19 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
         print("\033[91m[clip/local] Warning: google-api-python-client or google-auth not installed. Skipping upload.\033[0m", flush=True)
         return
 
-    final_title = title.replace("—", ":").replace("--", ":")
-    final_description = description.replace("—", ":").replace("--", ":")
+    final_title = title
+    final_description = description
 
     # Extract hashtags and tags from rules
     hashtags = re.findall(r"#[a-zA-Z0-9_]+", rules)
     tags = re.findall(r"@[a-zA-Z0-9_]+", rules)
+
+    clean_rules = rules
+    for ht in hashtags:
+        clean_rules = clean_rules.replace(ht, "")
+    for tg in tags:
+        clean_rules = clean_rules.replace(tg, "")
+    clean_rules = clean_rules.strip()
 
     if "#shorts" not in final_title.lower():
         final_title += " #shorts"
