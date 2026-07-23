@@ -95,6 +95,11 @@ def _existing_download(out_dir: str, video_id: str) -> Optional[str]:
 
 def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[str] = None) -> str:
     """Download a remote URL or return a local file path unchanged."""
+    # Ensure Deno/Node path is visible to yt-dlp inside python
+    deno_path = os.path.expanduser("~/.deno/bin")
+    if deno_path not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = deno_path + os.pathsep + os.environ.get("PATH", "")
+
     local_path = _resolve_local_path(video_url)
     if local_path:
         print(f"[download/local] using local file: {local_path}", flush=True)
