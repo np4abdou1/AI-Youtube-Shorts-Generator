@@ -37,7 +37,57 @@ def _cut_subclip(source_path: str, start: float, end: float, out_path: str) -> s
     return out_path
 
 
-def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
+def _get_subtitle_text(transcript: Optional[Dict], current_time: float) -> str:
+    if not transcript:
+        return ""
+    for seg in transcript.get("segments", []):
+        if seg["start"] <= current_time <= seg["end"]:
+            return seg.get("text", "").strip()
+    return ""
+
+
+def _wrap_text(text: str, max_chars: int = 18) -> List[str]:
+    words = text.split()
+    lines = []
+    current_line = []
+    current_len = 0
+    for w in words:
+        if current_len + len(w) + 1 > max_chars:
+            if current_line:
+                lines.append(" ".join(current_line))
+            current_line = [w]
+            current_len = len(w)
+        else:
+            current_line.append(w)
+            current_len += len(w) + 1
+    if current_line:
+        lines.append(" ".join(current_line))
+    return lines
+
+
+def _draw_styled_text(img, text: str, org: Tuple[int, int], font_face, font_scale, color, thickness, outline_thickness):
+    # Outline (black border)
+    import cv2  # type: ignore
+    cv2.putText(
+        img, text, org, font_face, font_scale,
+        (0, 0, 0), thickness + outline_thickness * 2,
+        lineType=cv2.LINE_AA
+    )
+    # Primary text
+    cv2.putText(
+        img, text, org, font_face, font_scale,
+        color, thickness,
+        lineType=cv2.LINE_AA
+    )
+
+
+def _reframe_vertical(
+    in_path: str,
+    out_path: str,
+    aspect_ratio: str,
+    transcript: Optional[Dict] = None,
+    start_time: float = 0.0,
+) -> str:
     """Crop the cut clip to the target aspect ratio, tracking faces if possible."""
     try:
         import cv2  # type: ignore
@@ -119,8 +169,6 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
             if cx is not None and cy is not None:
                 target_center = (cx, cy)
 
-        frame_count += 1
-
         if target_center is None:
             target_center = (src_w // 2, src_h // 2)
 
@@ -134,14 +182,40 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
                 int(ly + (ty - ly) * smoothing),
             )
 
-        if last_center is None:
-            last_center = (src_w // 2, src_h // 2)
-
         cx, cy = last_center
         x0 = max(0, min(src_w - crop_w, cx - crop_w // 2))
         y0 = max(0, min(src_h - crop_h, cy - crop_h // 2))
         cropped = frame[y0:y0 + crop_h, x0:x0 + crop_w]
+
+        # Draw dynamic subtitles if transcript is available
+        if transcript:
+            current_time = start_time + (frame_count / fps)
+            sub_text = _get_subtitle_text(transcript, current_time)
+            if sub_text:
+                wrapped = _wrap_text(sub_text, max_chars=18)
+                font_face = cv2.FONT_HERSHEY_DUPLEX
+                # Scale dynamically based on resolution
+                font_scale = crop_w / 360.0 * 0.8
+                thickness = max(1, int(font_scale * 2))
+                outline_thickness = max(1, int(font_scale * 3))
+                
+                # Render captions centered horizontally and placed at 70% height
+                base_y = int(crop_h * 0.70)
+                line_height = int(35 * font_scale)
+                for line_idx, line in enumerate(wrapped):
+                    text_size, _ = cv2.getTextSize(line, font_face, font_scale, thickness)
+                    text_w, text_h = text_size
+                    x_org = max(10, (crop_w - text_w) // 2)
+                    y_org = base_y + line_idx * line_height
+                    # Use vibrant yellow color (BGR: 0, 255, 255)
+                    _draw_styled_text(
+                        cropped, line, (x_org, y_org),
+                        font_face, font_scale, (0, 255, 255),
+                        thickness, outline_thickness
+                    )
+
         writer.write(cropped)
+        frame_count += 1
 
     cap.release()
     writer.release()
@@ -168,12 +242,13 @@ def crop_clip_local(
     end_time: float,
     aspect_ratio: str,
     out_path: str,
+    transcript: Optional[Dict] = None,
 ) -> str:
     """Cut + reframe one highlight, returning the local mp4 path."""
     cut_path = out_path + ".cut.mp4"
     try:
         _cut_subclip(source_path, start_time, end_time, cut_path)
-        _reframe_vertical(cut_path, out_path, aspect_ratio)
+        _reframe_vertical(cut_path, out_path, aspect_ratio, transcript=transcript, start_time=start_time)
     finally:
         if os.path.exists(cut_path):
             os.remove(cut_path)
@@ -185,6 +260,7 @@ def crop_highlights_local(
     highlights: List[Dict],
     aspect_ratio: str = "9:16",
     out_dir: Optional[str] = None,
+    transcript: Optional[Dict] = None,
 ) -> List[Dict]:
     out_dir = out_dir or LOCAL_OUTPUT_DIR
     os.makedirs(out_dir, exist_ok=True)
@@ -199,6 +275,7 @@ def crop_highlights_local(
                 float(h["end_time"]),
                 aspect_ratio,
                 out_path,
+                transcript=transcript,
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:

@@ -42,7 +42,7 @@ def _run_local(
     top = sorted(all_highlights, key=lambda h: int(h.get("score", 0)), reverse=True)[:num_clips]
     print(f"[pipeline/local] cropping {len(top)} of {len(all_highlights)} candidates", flush=True)
 
-    shorts = crop_highlights_local(source_path, top, aspect_ratio=aspect_ratio)
+    shorts = crop_highlights_local(source_path, top, aspect_ratio=aspect_ratio, transcript=transcript)
 
     return {
         "mode": "local",
