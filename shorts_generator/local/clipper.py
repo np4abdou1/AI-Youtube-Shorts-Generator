@@ -67,9 +67,8 @@ def _wrap_text(text: str, max_chars: int = 18) -> List[str]:
 
 
 def _draw_styled_text(img, text: str, org: Tuple[int, int], font_face, font_scale, color, thickness, outline_thickness):
-    import cv2  # type: ignore
-    
     # Drop Shadow (Offset black text)
+    import cv2  # type: ignore
     shadow_offset = max(1, int(font_scale * 3.5))
     cv2.putText(
         img, text, (org[0] + shadow_offset, org[1] + shadow_offset), 
@@ -326,9 +325,9 @@ def _reframe_vertical(
                     if sub_text:
                         wrapped = _wrap_text(sub_text, max_chars=18)
                         font_face = cv2.FONT_HERSHEY_SIMPLEX
-                        font_scale = out_w / 360.0 * 0.70
-                        thickness = max(1, int(font_scale * 2.2))
-                        outline_thickness = max(1, int(font_scale * 3.2))
+                        font_scale = out_w / 360.0 * 0.8
+                        thickness = max(1, int(font_scale * 2))
+                        outline_thickness = max(1, int(font_scale * 3))
                         
                         base_y = int(out_h * 0.80)
                         line_height = int(35 * font_scale)
@@ -386,6 +385,46 @@ def _reframe_vertical(
     subprocess.run(cmd, check=True)
     os.remove(silent_path)
     return out_path
+
+
+def _get_non_silent_segments(transcript: Optional[Dict], start_time: float, end_time: float, silence_threshold: float = 3.0) -> List[Tuple[float, float]]:
+    if not transcript:
+        return [(start_time, end_time)]
+        
+    words_in_highlight = []
+    for seg in transcript.get("segments", []):
+        for w in seg.get("words", []):
+            w_start = float(w["start"])
+            w_end = float(w["end"])
+            if w_start >= start_time and w_end <= end_time:
+                words_in_highlight.append(w)
+                
+    if not words_in_highlight:
+        return [(start_time, end_time)]
+        
+    words_in_highlight.sort(key=lambda x: x["start"])
+    
+    segments = []
+    current_start = start_time
+    
+    for i in range(len(words_in_highlight) - 1):
+        w_end = words_in_highlight[i]["end"]
+        next_w_start = words_in_highlight[i+1]["start"]
+        gap = next_w_start - w_end
+        
+        # If the gap between words is longer than our silence threshold, split
+        if gap >= silence_threshold:
+            segments.append((current_start, w_end))
+            current_start = next_w_start
+            
+    segments.append((current_start, end_time))
+    
+    cleaned_segments = []
+    for s_start, s_end in segments:
+        if s_end - s_start >= 0.5:
+            cleaned_segments.append((s_start, s_end))
+            
+    return cleaned_segments if cleaned_segments else [(start_time, end_time)]
 
 
 def _upload_to_youtube(file_path: str, title: str, description: str):
@@ -488,14 +527,62 @@ def crop_clip_local(
     transcript: Optional[Dict] = None,
     top_bar_hook: str = "",
 ) -> str:
-    """Cut + reframe one highlight, returning the local mp4 path."""
-    cut_path = out_path + ".cut.mp4"
+    """Cut + reframe highlight, automatically cutting out long silent gaps."""
+    # Detect non-silent segments (silence threshold of 3.0 seconds)
+    segments = _get_non_silent_segments(transcript, start_time, end_time, silence_threshold=3.0)
+    
+    if len(segments) == 1:
+        s_start, s_end = segments[0]
+        cut_path = out_path + ".cut.mp4"
+        try:
+            _cut_subclip(source_path, s_start, s_end, cut_path)
+            _reframe_vertical(cut_path, out_path, aspect_ratio, transcript=transcript, start_time=s_start, top_bar_hook=top_bar_hook)
+        finally:
+            if os.path.exists(cut_path):
+                os.remove(cut_path)
+        return out_path
+
+    # Multi-segment pipeline (jump-cut silences)
+    print(f"\033[95m[clip/local]\033[0m \033[93mLong silence detected. Splitting into {len(segments)} segments to cut silence...\033[0m", flush=True)
+    temp_files = []
+    
     try:
-        _cut_subclip(source_path, start_time, end_time, cut_path)
-        _reframe_vertical(cut_path, out_path, aspect_ratio, transcript=transcript, start_time=start_time, top_bar_hook=top_bar_hook)
+        for idx, (s_start, s_end) in enumerate(segments):
+            seg_out = f"{out_path}.seg{idx}.mp4"
+            cut_path = f"{out_path}.seg{idx}.cut.mp4"
+            
+            _cut_subclip(source_path, s_start, s_end, cut_path)
+            _reframe_vertical(cut_path, seg_out, aspect_ratio, transcript=transcript, start_time=s_start, top_bar_hook=top_bar_hook)
+            
+            if os.path.exists(cut_path):
+                os.remove(cut_path)
+                
+            temp_files.append(seg_out)
+            
+        # Concatenate the files using FFmpeg
+        concat_txt_path = out_path + ".concat.txt"
+        with open(concat_txt_path, "w", encoding="utf-8") as f:
+            for tf in temp_files:
+                abs_tf = os.path.abspath(tf).replace("'", "'\\''")
+                f.write(f"file '{abs_tf}'\n")
+                
+        cmd = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-f", "concat", "-safe", "0",
+            "-i", concat_txt_path,
+            "-c", "copy",
+            out_path
+        ]
+        subprocess.run(cmd, check=True)
+        
+        if os.path.exists(concat_txt_path):
+            os.remove(concat_txt_path)
+            
     finally:
-        if os.path.exists(cut_path):
-            os.remove(cut_path)
+        for tf in temp_files:
+            if os.path.exists(tf):
+                os.remove(tf)
+                
     return out_path
 
 
