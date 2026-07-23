@@ -40,7 +40,7 @@ def _run_local(
         raise RuntimeError("Highlight generator returned zero clips.")
 
     top = sorted(all_highlights, key=lambda h: int(h.get("score", 0)), reverse=True)[:num_clips]
-    print(f"[pipeline/local] cropping {len(top)} of {len(all_highlights)} candidates", flush=True)
+    print(f"\033[92m\033[1m[pipeline/local]\033[0m \033[96mCropping {len(top)} of {len(all_highlights)} candidates...\033[0m", flush=True)
 
     shorts = crop_highlights_local(source_path, top, aspect_ratio=aspect_ratio, transcript=transcript)
 

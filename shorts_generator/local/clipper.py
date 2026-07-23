@@ -126,14 +126,14 @@ def _reframe_vertical(
             from facenet_pytorch import MTCNN
             device = torch.device('cuda')
             mtcnn = MTCNN(keep_all=False, device=device, select_largest=True)
-            print("[clip/local] using PyTorch MTCNN on GPU (CUDA) for face tracking", flush=True)
+            print("\033[95m[clip/local]\033[0m \033[92m\033[1mUsing PyTorch MTCNN on GPU (CUDA) for face tracking\033[0m", flush=True)
         except ImportError:
-            print("[clip/local] facenet-pytorch not installed, falling back to CPU face tracking", flush=True)
+            print("\033[95m[clip/local]\033[0m \033[93mfacenet-pytorch not installed, falling back to CPU face tracking\033[0m", flush=True)
             use_gpu = False
 
     if not use_gpu:
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        print("[clip/local] using OpenCV CascadeClassifier on CPU for face tracking", flush=True)
+        print("\033[95m[clip/local]\033[0m \033[93mUsing OpenCV CascadeClassifier on CPU for face tracking\033[0m", flush=True)
 
     silent_path = out_path + ".silent.mp4"
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -271,7 +271,7 @@ def crop_highlights_local(
     results: List[Dict] = []
     for i, h in enumerate(highlights, 1):
         out_path = os.path.join(out_dir, f"short_{i:02d}.mp4")
-        print(f"[clip/local] {i}/{len(highlights)}: {h.get('title', '(untitled)')}", flush=True)
+        print(f"\033[95m[clip/local] {i}/{len(highlights)}:\033[0m \033[1m{h.get('title', '(untitled)')}\033[0m", flush=True)
         try:
             crop_clip_local(
                 source_path,
@@ -283,6 +283,6 @@ def crop_highlights_local(
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
-            print(f"[clip/local] {i} failed: {e}", flush=True)
+            print(f"\033[95m[clip/local] {i} failed:\033[0m \033[91m{e}\033[0m", flush=True)
             results.append({**h, "clip_url": None, "error": str(e)})
     return results

@@ -102,7 +102,7 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
 
     local_path = _resolve_local_path(video_url)
     if local_path:
-        print(f"[download/local] using local file: {local_path}", flush=True)
+        print(f"\033[96m[download/local]\033[0m \033[92mUsing local file:\033[0m {local_path}", flush=True)
         return local_path
 
     yt_dlp = _import_ytdlp()
@@ -113,7 +113,7 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
     if video_id:
         cached = _existing_download(out_dir, video_id)
         if cached:
-            print(f"[download/local] reusing cached download: {cached}", flush=True)
+            print(f"\033[96m[download/local]\033[0m \033[93mReusing cached download:\033[0m {cached}", flush=True)
             return cached
 
     import subprocess
@@ -154,9 +154,9 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
                 f.write(netscape)
             os.chmod(temp_cookies, 0o444)
             cookies_to_use = temp_cookies
-            print("[download/local] loaded and converted cookies.json", flush=True)
+            print("\033[96m[download/local]\033[0m \033[92mLoaded and converted cookies.json\033[0m", flush=True)
         except Exception as e:
-            print(f"[download/local] warning: failed to parse cookies.json: {e}", flush=True)
+            print(f"\033[96m[download/local]\033[0m \033[91mWarning: failed to parse cookies.json: {e}\033[0m", flush=True)
             if os.path.exists(cookies_path):
                 cookies_to_use = cookies_path
     elif os.path.exists(cookies_path):
@@ -167,7 +167,7 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
 
     cmd.append(video_url)
     
-    print(f"[download/local] downloading with command: {' '.join(cmd)}", flush=True)
+    print(f"\033[96m[download/local]\033[0m \033[1mDownloading with command:\033[0m {' '.join(cmd)}", flush=True)
     subprocess.run(cmd, check=True)
     
     # Locate the downloaded file
@@ -179,5 +179,5 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
                 path = stem + ext
                 break
 
-    print(f"[download/local] ready: {path}", flush=True)
+    print(f"\033[96m[download/local]\033[0m \033[92m\033[1mReady:\033[0m {path}", flush=True)
     return path

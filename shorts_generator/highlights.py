@@ -282,7 +282,7 @@ def get_highlights(
     llm_fn = llm_fn or call_muapi_llm
     duration = transcript.get("duration", 0)
     content_info = detect_content_type(transcript, llm_fn=llm_fn)
-    print(f"[highlights] content={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s", flush=True)
+    print(f"\033[94m[highlights]\033[0m \033[1mcontent={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s\033[0m", flush=True)
 
     if duration >= LONG_VIDEO_THRESHOLD:
         chunks = chunk_transcript(transcript)

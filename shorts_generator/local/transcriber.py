@@ -102,16 +102,16 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
         source_mtime = os.path.getmtime(media_path)
         cache_mtime = cache_path.stat().st_mtime
         if cache_mtime >= source_mtime:
-            print(f"[transcribe/local] reusing cached transcript: {cache_path}", flush=True)
+            print(f"\033[93m[transcribe/local] Reusing cached transcript:\033[0m {cache_path}", flush=True)
             cached = _load_srt_cache(cache_path)
             # Treat empty cache as invalid (likely from a failed/partial run) — delete and re-transcribe
             if not cached["segments"] or cached["duration"] <= 0.0:
-                print(f"[transcribe/local] cache is empty/invalid, deleting: {cache_path}", flush=True)
+                print(f"\033[91m[transcribe/local] Cache is empty/invalid, deleting:\033[0m {cache_path}", flush=True)
                 cache_path.unlink(missing_ok=True)
             else:
                 print(
-                    f"[transcribe/local] {len(cached['segments'])} cached segments, "
-                    f"{cached['duration']:.0f}s of audio",
+                    f"\033[93m[transcribe/local]\033[0m \033[92mLoaded {len(cached['segments'])} cached segments, "
+                    f"{cached['duration']:.0f}s of audio\033[0m",
                     flush=True,
                 )
                 return cached
@@ -126,7 +126,7 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
 
     device = _resolve_device()
     compute_type = "float16" if device == "cuda" else "int8"
-    print(f"[transcribe/local] faster-whisper model={LOCAL_WHISPER_MODEL} device={device}", flush=True)
+    print(f"\033[93m[transcribe/local]\033[0m \033[1mRunning faster-whisper model={LOCAL_WHISPER_MODEL} device={device}\033[0m", flush=True)
 
     from ..config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
 
@@ -155,8 +155,8 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
         })
 
     duration = float(getattr(info, "duration", 0.0)) or (segments[-1]["end"] if segments else 0.0)
-    print(f"[transcribe/local] {len(segments)} segments, {duration:.0f}s of audio", flush=True)
+    print(f"\033[93m[transcribe/local]\033[0m \033[92mCompleted {len(segments)} segments, {duration:.0f}s of audio\033[0m", flush=True)
     transcript = {"duration": duration, "segments": segments}
     cache_path = _write_srt_cache(media_path, transcript)
-    print(f"[transcribe/local] wrote cache: {cache_path}", flush=True)
+    print(f"\033[93m[transcribe/local]\033[0m Wrote cache: {cache_path}", flush=True)
     return transcript
