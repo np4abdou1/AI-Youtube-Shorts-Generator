@@ -55,10 +55,11 @@ Rules:
 - Score 0-100 on viral potential (not general quality)
 - {num_clips_instruction}
 - For each highlight, identify the single best "hook_sentence" — the opening line that would make someone stop scrolling
+- Create a highly catchy and engaging "top_bar_hook" title (max 25 characters) to be displayed on a black bar at the top of the video (e.g. "WAIT FOR IT...", "Watch until the end!", "This gets crazy...")
 - Explain in one sentence why this clip is viral ("virality_reason")
 
 Respond ONLY with valid JSON (no markdown, no explanation):
-{{"highlights":[{{"title":"string","start_time":float,"end_time":float,"score":int,"hook_sentence":"string","virality_reason":"string"}}]}}"""
+{{"highlights":[{{"title":"string","start_time":float,"end_time":float,"score":int,"hook_sentence":"string","top_bar_hook":"string","virality_reason":"string"}}]}}"""
 
 
 CHUNK_SIZE_SECONDS = 1200       # 20-min chunks for long videos
@@ -153,6 +154,7 @@ def _sanitize_highlights(raw_highlights: object, duration: float) -> List[Dict]:
                 "end_time": end,
                 "score": max(0, min(100, _coerce_int(item.get("score"), default=0))),
                 "hook_sentence": str(item.get("hook_sentence") or "").strip(),
+                "top_bar_hook": str(item.get("top_bar_hook") or "WAIT FOR IT...").strip(),
                 "virality_reason": str(item.get("virality_reason") or "").strip(),
             }
         )

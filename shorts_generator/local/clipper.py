@@ -87,6 +87,7 @@ def _reframe_vertical(
     aspect_ratio: str,
     transcript: Optional[Dict] = None,
     start_time: float = 0.0,
+    top_bar_hook: str = "",
 ) -> str:
     """Crop the cut clip to the target aspect ratio, tracking faces if possible."""
     try:
@@ -264,6 +265,30 @@ def _reframe_vertical(
                         thickness, outline_thickness
                     )
 
+        # Draw static top bar hook (white color: 255, 255, 255)
+        if top_bar_hook:
+            wrapped_top = _wrap_text(top_bar_hook.upper(), max_chars=18)
+            font_face = cv2.FONT_HERSHEY_DUPLEX
+            font_scale = out_w / 360.0 * 0.9
+            thickness = max(1, int(font_scale * 2.5))
+            outline_thickness = max(1, int(font_scale * 3.5))
+            
+            top_bar_height = y_offset
+            line_height = int(40 * font_scale)
+            total_text_h = len(wrapped_top) * line_height
+            start_y = max(15, (top_bar_height - total_text_h) // 2 + line_height)
+            
+            for line_idx, line in enumerate(wrapped_top):
+                text_size, _ = cv2.getTextSize(line, font_face, font_scale, thickness)
+                text_w, text_h = text_size
+                x_org = max(10, (out_w - text_w) // 2)
+                y_org = start_y + line_idx * line_height
+                _draw_styled_text(
+                    canvas, line, (x_org, y_org),
+                    font_face, font_scale, (255, 255, 255),
+                    thickness, outline_thickness
+                )
+
         writer.write(canvas)
 
     cap.release()
@@ -292,12 +317,13 @@ def crop_clip_local(
     aspect_ratio: str,
     out_path: str,
     transcript: Optional[Dict] = None,
+    top_bar_hook: str = "",
 ) -> str:
     """Cut + reframe one highlight, returning the local mp4 path."""
     cut_path = out_path + ".cut.mp4"
     try:
         _cut_subclip(source_path, start_time, end_time, cut_path)
-        _reframe_vertical(cut_path, out_path, aspect_ratio, transcript=transcript, start_time=start_time)
+        _reframe_vertical(cut_path, out_path, aspect_ratio, transcript=transcript, start_time=start_time, top_bar_hook=top_bar_hook)
     finally:
         if os.path.exists(cut_path):
             os.remove(cut_path)
@@ -325,6 +351,7 @@ def crop_highlights_local(
                 aspect_ratio,
                 out_path,
                 transcript=transcript,
+                top_bar_hook=h.get("top_bar_hook", "WAIT FOR IT..."),
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
