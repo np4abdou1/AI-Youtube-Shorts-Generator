@@ -396,19 +396,12 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
         print("\033[91m[clip/local] Warning: google-api-python-client or google-auth not installed. Skipping upload.\033[0m", flush=True)
         return
 
-    final_title = title
-    final_description = description
+    final_title = title.replace("—", ":").replace("--", ":")
+    final_description = description.replace("—", ":").replace("--", ":")
 
     # Extract hashtags and tags from rules
     hashtags = re.findall(r"#[a-zA-Z0-9_]+", rules)
     tags = re.findall(r"@[a-zA-Z0-9_]+", rules)
-
-    clean_rules = rules
-    for ht in hashtags:
-        clean_rules = clean_rules.replace(ht, "")
-    for tg in tags:
-        clean_rules = clean_rules.replace(tg, "")
-    clean_rules = clean_rules.strip()
 
     if "#shorts" not in final_title.lower():
         final_title += " #shorts"
@@ -422,8 +415,6 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
     desc_lines = [final_description]
     if tags:
         desc_lines.append(" ".join(tags))
-    if clean_rules:
-        desc_lines.append(f"\nRules applied:\n{clean_rules}")
     final_description = "\n\n".join(desc_lines)
 
     print(f"\033[92m[clip/local] Uploading to YouTube channel (@ghclip1) as Short...\033[0m", flush=True)
