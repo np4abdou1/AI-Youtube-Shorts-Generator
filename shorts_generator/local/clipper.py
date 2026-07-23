@@ -177,10 +177,14 @@ def _reframe_vertical(
         else:
             lx, ly = last_center
             tx, ty = target_center
-            last_center = (
-                int(lx + (tx - lx) * smoothing),
-                int(ly + (ty - ly) * smoothing),
-            )
+            distance = ((tx - lx) ** 2 + (ty - ly) ** 2) ** 0.5
+            if distance > (crop_w // 3):
+                last_center = target_center
+            else:
+                last_center = (
+                    int(lx + (tx - lx) * smoothing),
+                    int(ly + (ty - ly) * smoothing),
+                )
 
         cx, cy = last_center
         x0 = max(0, min(src_w - crop_w, cx - crop_w // 2))
