@@ -81,6 +81,63 @@ def _draw_styled_text(img, text: str, org: Tuple[int, int], font_face, font_scal
     )
 
 
+def _draw_dynamic_captions(canvas, words: List[Dict], current_time: float, out_w: int, out_h: int):
+    import cv2  # type: ignore
+    # Find the active word index
+    active_idx = -1
+    for idx, w in enumerate(words):
+        if w["start"] <= current_time <= w["end"]:
+            active_idx = idx
+            break
+            
+    # If no word is currently active, fallback to the word closest to current_time
+    if active_idx == -1 and words:
+        active_idx = min(range(len(words)), key=lambda i: abs(words[i]["start"] - current_time))
+        
+    if active_idx == -1 or not words:
+        return
+        
+    # Create a 3-word window centered around the active word
+    start_win = max(0, active_idx - 1)
+    end_win = min(len(words), start_win + 3)
+    if end_win - start_win < 3:
+        start_win = max(0, end_win - 3)
+    window_words = words[start_win:end_win]
+    
+    font_face = cv2.FONT_HERSHEY_DUPLEX
+    font_scale = out_w / 360.0 * 0.95
+    thickness = max(2, int(font_scale * 2.5))
+    outline_thickness = max(2, int(font_scale * 3.5))
+    
+    word_sizes = []
+    space_size, _ = cv2.getTextSize(" ", font_face, font_scale, thickness)
+    space_w = space_size[0]
+    
+    total_w = 0
+    for idx, w in enumerate(window_words):
+        t_size, _ = cv2.getTextSize(w["word"].upper(), font_face, font_scale, thickness)
+        word_sizes.append(t_size[0])
+        total_w += t_size[0]
+        if idx < len(window_words) - 1:
+            total_w += space_w
+            
+    start_x = max(10, (out_w - total_w) // 2)
+    y_org = int(out_h * 0.80)
+    
+    current_x = start_x
+    for idx, w in enumerate(window_words):
+        word_text = w["word"].upper()
+        is_active = (start_win + idx == active_idx)
+        color = (0, 255, 255) if is_active else (255, 255, 255)
+        
+        _draw_styled_text(
+            canvas, word_text, (current_x, y_org),
+            font_face, font_scale, color,
+            thickness, outline_thickness
+        )
+        current_x += word_sizes[idx] + space_w
+
+
 def _reframe_vertical(
     in_path: str,
     out_path: str,
@@ -242,28 +299,37 @@ def _reframe_vertical(
         if transcript:
             # Use millisecond container position to maintain perfect sync
             current_time = start_time + (cap.get(cv2.CAP_PROP_POS_MSEC) / 1000.0)
-            sub_text = _get_subtitle_text(transcript, current_time)
-            if sub_text:
-                wrapped = _wrap_text(sub_text, max_chars=18)
-                font_face = cv2.FONT_HERSHEY_DUPLEX
-                # Scale based on output width
-                font_scale = out_w / 360.0 * 0.8
-                thickness = max(1, int(font_scale * 2))
-                outline_thickness = max(1, int(font_scale * 3))
-                
-                # Render captions centered in the black bar region or lower video area
-                base_y = int(out_h * 0.80)
-                line_height = int(35 * font_scale)
-                for line_idx, line in enumerate(wrapped):
-                    text_size, _ = cv2.getTextSize(line, font_face, font_scale, thickness)
-                    text_w, text_h = text_size
-                    x_org = max(10, (out_w - text_w) // 2)
-                    y_org = base_y + line_idx * line_height
-                    _draw_styled_text(
-                        canvas, line, (x_org, y_org),
-                        font_face, font_scale, (0, 255, 255),
-                        thickness, outline_thickness
-                    )
+            active_seg = None
+            for seg in transcript.get("segments", []):
+                if seg["start"] <= current_time <= seg["end"]:
+                    active_seg = seg
+                    break
+            
+            if active_seg:
+                words = active_seg.get("words", [])
+                if words:
+                    _draw_dynamic_captions(canvas, words, current_time, out_w, out_h)
+                else:
+                    sub_text = active_seg.get("text", "").strip()
+                    if sub_text:
+                        wrapped = _wrap_text(sub_text, max_chars=18)
+                        font_face = cv2.FONT_HERSHEY_DUPLEX
+                        font_scale = out_w / 360.0 * 0.8
+                        thickness = max(1, int(font_scale * 2))
+                        outline_thickness = max(1, int(font_scale * 3))
+                        
+                        base_y = int(out_h * 0.80)
+                        line_height = int(35 * font_scale)
+                        for line_idx, line in enumerate(wrapped):
+                            text_size, _ = cv2.getTextSize(line, font_face, font_scale, thickness)
+                            text_w, text_h = text_size
+                            x_org = max(10, (out_w - text_w) // 2)
+                            y_org = base_y + line_idx * line_height
+                            _draw_styled_text(
+                                canvas, line, (x_org, y_org),
+                                font_face, font_scale, (0, 255, 255),
+                                thickness, outline_thickness
+                            )
 
         # Draw static top bar hook (white color: 255, 255, 255)
         if top_bar_hook:
