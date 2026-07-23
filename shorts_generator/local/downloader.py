@@ -152,7 +152,6 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
                 netscape += f"{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{value}\n"
             with open(temp_cookies, "w", encoding="utf-8") as f:
                 f.write(netscape)
-            os.chmod(temp_cookies, 0o444)
             cookies_to_use = temp_cookies
             print("\033[96m[download/local]\033[0m \033[92mLoaded and converted cookies.json\033[0m", flush=True)
         except Exception as e:
