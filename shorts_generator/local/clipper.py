@@ -91,27 +91,30 @@ def _reframe_vertical(in_path: str, out_path: str, aspect_ratio: str) -> str:
 
     last_center: Optional[Tuple[int, int]] = None
     smoothing = 0.15  # how aggressively to chase a new face position
+    frame_count = 0
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
         cx, cy = None, None
-        if use_gpu and mtcnn is not None:
-            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            boxes, _ = mtcnn.detect(rgb_frame)
-            if boxes is not None and len(boxes) > 0:
-                x1, y1, x2, y2 = boxes[0]
-                cx = int((x1 + x2) / 2)
-                cy = int((y1 + y2) / 2)
-        elif face_cascade is not None:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
-            if len(faces) > 0:
-                # Pick the largest face — usually the speaker.
-                x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
-                cx = x + w // 2
-                cy = y + h // 2
+        if frame_count % 5 == 0:
+            if use_gpu and mtcnn is not None:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                boxes, _ = mtcnn.detect(rgb_frame)
+                if boxes is not None and len(boxes) > 0:
+                    x1, y1, x2, y2 = boxes[0]
+                    cx = int((x1 + x2) / 2)
+                    cy = int((y1 + y2) / 2)
+            elif face_cascade is not None:
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(40, 40))
+                if len(faces) > 0:
+                    # Pick the largest face — usually the speaker.
+                    x, y, w, h = max(faces, key=lambda f: f[2] * f[3])
+                    cx = x + w // 2
+                    cy = y + h // 2
+        frame_count += 1
 
         if cx is not None and cy is not None:
             if last_center is None:
