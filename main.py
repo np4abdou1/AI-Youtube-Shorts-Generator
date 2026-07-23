@@ -44,6 +44,8 @@ def main() -> int:
             mode=args.mode,
         )
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"\n\033[91m\033[1m[ERROR] FAILED:\033[0m \033[91m{e}\033[0m", file=sys.stderr)
         return 1
 
