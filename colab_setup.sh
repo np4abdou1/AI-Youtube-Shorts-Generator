@@ -5,7 +5,7 @@
 set -e
 
 echo "=== Installing Deno ==="
-curl -fsSL https://deno.land/install.sh | sh
+curl -fsSL https://deno.land/install.sh | sh || true
 export PATH="$HOME/.deno/bin:$PATH"
 
 echo "=== Installing Python deps ==="
