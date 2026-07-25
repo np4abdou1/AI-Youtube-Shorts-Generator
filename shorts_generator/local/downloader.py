@@ -123,7 +123,7 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
         "--merge-output-format", "mp4",
         "--output", os.path.join(out_dir, "source_%(id)s.%(ext)s"),
         "--remote-components", "ejs:github",
-        "--extractor-args", "youtube:player_client=android",
+        "--extractor-args", "youtube:player_client=ios,android,web",
     ]
     
     cookies_to_use = None
