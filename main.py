@@ -49,19 +49,22 @@ def main() -> int:
         print(f"\n\033[91m\033[1m[ERROR] FAILED:\033[0m \033[91m{e}\033[0m", file=sys.stderr)
         return 1
 
-    print("\n\033[96m\033[1m" + "=" * 72 + "\033[0m")
-    print(f"\033[96mMode:          \033[0m\033[1m{result.get('mode', args.mode).upper()}\033[0m")
-    print(f"\033[96mSource video:  \033[0m{result['source_video_url']}")
-    print(f"\033[96mHighlights:    \033[0m{len(result['highlights'])} candidates \033[92m\033[1m→\033[0m kept top {len(result['shorts'])}")
-    print("\033[96m\033[1m" + "=" * 72 + "\033[0m")
+    print("\n\033[95m\033[1m" + "=" * 72 + "\033[0m")
+    print("\033[95m\033[1m 🎬 AI YOUTUBE SHORTS GENERATOR \033[0m")
+    print("\033[95m\033[1m" + "=" * 72 + "\033[0m")
+    print(f" \033[96m🚀 Mode:          \033[0m\033[1m{result.get('mode', args.mode).upper()}\033[0m")
+    print(f" \033[96m🎥 Source video:  \033[0m{result['source_video_url']}")
+    print(f" \033[96m🧠 Highlights:    \033[0m{len(result['highlights'])} candidates \033[92m\033[1m→\033[0m kept top {len(result['shorts'])}")
+    print("\033[96m\033[1m" + "-" * 72 + "\033[0m")
     for i, s in enumerate(result["shorts"], 1):
-        print(f"\n\033[92m\033[1m#{i}\033[0m  \033[93m\033[1mscore={s.get('score')}\033[0m  \033[96m{s.get('start_time'):.1f}s → {s.get('end_time'):.1f}s\033[0m")
-        print(f"     \033[1mtitle:\033[0m  {s.get('title')}")
-        print(f"     \033[1mhook:\033[0m   \"{s.get('hook_sentence')}\"")
+        print(f"\n\033[92m\033[1m ✂️  Clip #{i}\033[0m  \033[93m\033[1m(Score: {s.get('score')}/10)\033[0m  \033[96m[{s.get('start_time'):.1f}s → {s.get('end_time'):.1f}s]\033[0m")
+        print(f"     \033[1m📌 Title:\033[0m {s.get('title')}")
+        print(f"     \033[1m🪝 Hook: \033[0m \"{s.get('hook_sentence')}\"")
         if s.get("clip_url"):
-            print(f"     \033[92m\033[1mclip:\033[0m   {s['clip_url']}")
+            print(f"     \033[92m\033[1m✅ Output:\033[0m {s['clip_url']}")
         else:
-            print(f"     \033[91m\033[1mclip:\033[0m   FAILED ({s.get('error')})")
+            print(f"     \033[91m\033[1m❌ Error: \033[0m {s.get('error')}")
+    print("\033[95m\033[1m" + "=" * 72 + "\033[0m")
 
     if args.output_json:
         with open(args.output_json, "w") as f:

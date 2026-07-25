@@ -80,7 +80,7 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
 
     device = _resolve_device()
     compute_type = "float16" if device == "cuda" else "int8"
-    print(f"\033[93m[transcribe/local]\033[0m \033[1mRunning faster-whisper model={LOCAL_WHISPER_MODEL} device={device}\033[0m", flush=True)
+    print(f"\033[93m\033[1m 🎙️  [transcribe/local]\033[0m \033[1mRunning faster-whisper model={LOCAL_WHISPER_MODEL} device={device}\033[0m", flush=True)
 
     from ..config import LOCAL_WHISPER_VAD_FILTER, LOCAL_WHISPER_VAD_PARAMETERS
 
@@ -119,8 +119,8 @@ def transcribe_local(media_path: str, language: Optional[str] = None) -> Dict:
         })
 
     duration = float(getattr(info, "duration", 0.0)) or (segments[-1]["end"] if segments else 0.0)
-    print(f"\033[93m[transcribe/local]\033[0m \033[92mCompleted {len(segments)} segments, {duration:.0f}s of audio\033[0m", flush=True)
+    print(f"\033[93m\033[1m 🎙️  [transcribe/local]\033[0m \033[92m✅ Completed {len(segments)} segments, {duration:.0f}s of audio\033[0m", flush=True)
     transcript = {"duration": duration, "segments": segments}
     cache_path = _write_json_cache(media_path, transcript)
-    print(f"\033[93m[transcribe/local]\033[0m Wrote cache: {cache_path}", flush=True)
+    print(f"\033[93m\033[1m 💾 [transcribe/local]\033[0m Wrote cache: {cache_path}", flush=True)
     return transcript

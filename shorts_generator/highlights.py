@@ -243,7 +243,7 @@ def call_highlight_api(
 
         if attempt < MAX_HIGHLIGHT_API_ATTEMPTS:
             print(
-                f"[highlights] invalid model output on attempt {attempt}/{MAX_HIGHLIGHT_API_ATTEMPTS}; retrying",
+                f"\033[93m\033[1m ⚠️ [highlights]\033[0m invalid model output on attempt {attempt}/{MAX_HIGHLIGHT_API_ATTEMPTS}; retrying",
                 flush=True,
             )
             prompt = (
@@ -292,16 +292,16 @@ def get_highlights(
     llm_fn = llm_fn or call_muapi_llm
     duration = transcript.get("duration", 0)
     content_info = detect_content_type(transcript, llm_fn=llm_fn)
-    print(f"\033[94m[highlights]\033[0m \033[1mcontent={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s\033[0m", flush=True)
+    print(f"\033[94m\033[1m 🧠 [highlights]\033[0m \033[1mcontent={content_info.get('content_type')} density={content_info.get('density')} duration={duration:.0f}s\033[0m", flush=True)
 
     if duration >= LONG_VIDEO_THRESHOLD:
         chunks = chunk_transcript(transcript)
-        print(f"[highlights] long video — splitting into {len(chunks)} chunks", flush=True)
+        print(f"\033[94m\033[1m 🧠 [highlights]\033[0m long video — splitting into {len(chunks)} chunks", flush=True)
         all_highlights: List[Dict] = []
         for i, chunk in enumerate(chunks):
             offset = chunk.get("_offset", 0)
             text = build_transcript_text(chunk)
-            print(f"[highlights] chunk {i + 1}/{len(chunks)} (offset {offset:.0f}s)", flush=True)
+            print(f"\033[94m\033[1m 🧠 [highlights]\033[0m chunk {i + 1}/{len(chunks)} (offset {offset:.0f}s)", flush=True)
             result = call_highlight_api(text, content_info, chunk["duration"], num_clips=num_clips, is_chunk=True, llm_fn=llm_fn)
             for h in result.get("highlights", []):
                 h["start_time"] = float(h["start_time"]) + offset

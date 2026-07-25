@@ -25,16 +25,30 @@ def _ratio(aspect_ratio: str) -> float:
 
 def _cut_subclip(source_path: str, start: float, end: float, out_path: str) -> str:
     """ffmpeg -ss start -to end → re-encoded mp4 with audio."""
-    cmd = [
+    # Try h264_nvenc for fast hardware encoding on GPU, fallback to libx264 ultrafast
+    cmd_nvenc = [
         "ffmpeg", "-y", "-loglevel", "error",
         "-i", source_path,
         "-ss", f"{start:.3f}",
         "-to", f"{end:.3f}",
-        "-c:v", "libx264", "-preset", "fast", "-crf", "18",
+        "-c:v", "h264_nvenc", "-preset", "p1", "-cq", "23",
         "-c:a", "aac", "-b:a", "192k",
         out_path,
     ]
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd_nvenc, check=True, stderr=subprocess.PIPE)
+    except subprocess.CalledProcessError:
+        # Fallback to CPU encoding
+        cmd_cpu = [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", source_path,
+            "-ss", f"{start:.3f}",
+            "-to", f"{end:.3f}",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
+            "-c:a", "aac", "-b:a", "192k",
+            out_path,
+        ]
+        subprocess.run(cmd_cpu, check=True)
     return out_path
 
 
@@ -108,12 +122,11 @@ def _draw_dynamic_captions(canvas, words: List[Dict], current_time: float, out_w
     if active_idx == -1 or not words:
         return
         
-    # Create a 3-word window centered around the active word
-    start_win = max(0, active_idx - 1)
-    end_win = min(len(words), start_win + 3)
-    if end_win - start_win < 3:
-        start_win = max(0, end_win - 3)
-    window_words = words[start_win:end_win]
+    # Group words into static chunks of 4 words each
+    chunk_size = 4
+    chunk_start = (active_idx // chunk_size) * chunk_size
+    chunk_end = min(len(words), chunk_start + chunk_size)
+    window_words = words[chunk_start:chunk_end]
     
     font_face = cv2.FONT_HERSHEY_SIMPLEX
     font_scale = out_w / 360.0 * 0.70
@@ -196,18 +209,50 @@ def _reframe_vertical(
             from facenet_pytorch import MTCNN
             device = torch.device('cuda')
             mtcnn = MTCNN(keep_all=False, device=device, select_largest=True)
-            print("\033[95m[clip/local]\033[0m \033[92m\033[1mUsing PyTorch MTCNN on GPU (CUDA) for face tracking\033[0m", flush=True)
+            print("\033[95m\033[1m 🚀 [clip/local]\033[0m \033[92m\033[1mUsing PyTorch MTCNN on GPU (CUDA) for face tracking\033[0m", flush=True)
         except ImportError:
-            print("\033[95m[clip/local]\033[0m \033[93mfacenet-pytorch not installed, falling back to CPU face tracking\033[0m", flush=True)
+            print("\033[95m\033[1m ⚠️ [clip/local]\033[0m \033[93mfacenet-pytorch not installed, falling back to CPU face tracking\033[0m", flush=True)
             use_gpu = False
 
     if not use_gpu:
         face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-        print("\033[95m[clip/local]\033[0m \033[93mUsing OpenCV CascadeClassifier on CPU for face tracking\033[0m", flush=True)
+        print("\033[95m\033[1m 🐌 [clip/local]\033[0m \033[93mUsing OpenCV CascadeClassifier on CPU for face tracking\033[0m", flush=True)
 
-    silent_path = out_path + ".silent.mp4"
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(silent_path, fourcc, fps, (out_w, out_h))
+    # Use ffmpeg pipe to write frames directly without cv2.VideoWriter
+    cmd_nvenc = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "rawvideo", "-vcodec", "rawvideo",
+        "-s", f"{out_w}x{out_h}", "-pix_fmt", "bgr24", "-r", str(fps),
+        "-i", "-",  # read from stdin
+        "-i", in_path,  # for audio
+        "-c:v", "h264_nvenc", "-preset", "p1", "-cq", "23", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v:0", "-map", "1:a:0?",
+        "-shortest",
+        out_path,
+    ]
+    cmd_cpu = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "rawvideo", "-vcodec", "rawvideo",
+        "-s", f"{out_w}x{out_h}", "-pix_fmt", "bgr24", "-r", str(fps),
+        "-i", "-",  # read from stdin
+        "-i", in_path,  # for audio
+        "-c:v", "libx264", "-preset", "superfast", "-crf", "23", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "192k",
+        "-map", "0:v:0", "-map", "1:a:0?",
+        "-shortest",
+        out_path,
+    ]
+    
+    # Check if NVENC works
+    try:
+        subprocess.run(["ffmpeg", "-f", "lavfi", "-i", "nullsrc", "-c:v", "h264_nvenc", "-t", "0.1", "-f", "null", "-"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        use_nvenc = True
+    except:
+        use_nvenc = False
+
+    cmd = cmd_nvenc if use_nvenc else cmd_cpu
+    process = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
     last_center: Optional[Tuple[int, int]] = None
     target_center: Optional[Tuple[int, int]] = None
@@ -344,11 +389,23 @@ def _reframe_vertical(
 
         # Draw static top bar hook (white color: 255, 255, 255)
         if top_bar_hook:
-            wrapped_top = _wrap_text(top_bar_hook.upper(), max_chars=18)
+            text_upper = top_bar_hook.upper()
             font_face = cv2.FONT_HERSHEY_SIMPLEX
             font_scale = out_w / 360.0 * 0.70
             thickness = max(1, int(font_scale * 2.2))
             outline_thickness = max(1, int(font_scale * 3.2))
+            
+            # Smart wrap: 1 line if it fits, 2 lines if long
+            text_size, _ = cv2.getTextSize(text_upper, font_face, font_scale, thickness)
+            if text_size[0] <= out_w - 20:
+                wrapped_top = [text_upper]
+            else:
+                words = text_upper.split()
+                mid = len(words) // 2
+                if mid > 0:
+                    wrapped_top = [" ".join(words[:mid]), " ".join(words[mid:])]
+                else:
+                    wrapped_top = [text_upper]
             
             top_bar_height = y_offset
             line_height = int(40 * font_scale)
@@ -366,24 +423,17 @@ def _reframe_vertical(
                     thickness, outline_thickness
                 )
 
-        writer.write(canvas)
+        try:
+            if process.stdin:
+                process.stdin.write(canvas.tobytes())
+        except BrokenPipeError:
+            break
 
     cap.release()
-    writer.release()
+    if process.stdin:
+        process.stdin.close()
+    process.wait()
 
-    # Mux audio from the cut clip and RE-ENCODE the silent reframed video to H.264 (Crucial for YouTube/TikTok quality)
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-i", silent_path,
-        "-i", in_path,
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p",
-        "-c:a", "aac", "-b:a", "192k",
-        "-map", "0:v:0", "-map", "1:a:0?",
-        "-shortest",
-        out_path,
-    ]
-    subprocess.run(cmd, check=True)
-    os.remove(silent_path)
     return out_path
 
 
@@ -435,7 +485,7 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
     rules = os.environ.get("YOUTUBE_RULES", "")
 
     if not client_id or not client_secret or not refresh_token:
-        print("\033[93m[clip/local] YouTube credentials not set. Skipping upload.\033[0m", flush=True)
+        print("\033[93m\033[1m ⚠️ [clip/local]\033[0m YouTube credentials not set. Skipping upload.\033[0m", flush=True)
         return
 
     try:
@@ -443,7 +493,7 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
         from googleapiclient.discovery import build  # type: ignore
         from googleapiclient.http import MediaFileUpload  # type: ignore
     except ImportError:
-        print("\033[91m[clip/local] Warning: google-api-python-client or google-auth not installed. Skipping upload.\033[0m", flush=True)
+        print("\033[91m\033[1m ❌ [clip/local]\033[0m Warning: google-api-python-client or google-auth not installed. Skipping upload.\033[0m", flush=True)
         return
 
     final_title = title
@@ -474,8 +524,8 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
         desc_lines.append(" ".join(tags))
     final_description = "\n\n".join(desc_lines)
 
-    print(f"\033[92m[clip/local] Uploading to YouTube channel (@ghclip1) as Short...\033[0m", flush=True)
-    print(f"  Title: {final_title}", flush=True)
+    print(f"\033[92m\033[1m 📤 [clip/local] Uploading to YouTube channel (@ghclip1) as Short...\033[0m", flush=True)
+    print(f"  📌 Title: {final_title}", flush=True)
     
     try:
         creds = Credentials(
@@ -510,12 +560,12 @@ def _upload_to_youtube(file_path: str, title: str, description: str):
         while response is None:
             status, response = request.next_chunk()
             if status:
-                print(f"  Upload progress: {int(status.progress() * 100)}%", flush=True)
+                print(f"  ⏳ Upload progress: {int(status.progress() * 100)}%", flush=True)
                 
         video_id = response.get("id")
-        print(f"\033[92m\033[1m[clip/local] Success! Uploaded as Short. Video Link: https://youtu.be/{video_id}\033[0m", flush=True)
+        print(f"\033[92m\033[1m 🟢 [clip/local] Success! Uploaded as Short. Video Link: https://youtu.be/{video_id}\033[0m", flush=True)
     except Exception as e:
-        print(f"\033[91m[clip/local] YouTube Upload Failed: {e}\033[0m", flush=True)
+        print(f"\033[91m\033[1m ❌ [clip/local] YouTube Upload Failed: {e}\033[0m", flush=True)
 
 
 def crop_clip_local(
@@ -543,7 +593,7 @@ def crop_clip_local(
         return out_path
 
     # Multi-segment pipeline (jump-cut silences)
-    print(f"\033[95m[clip/local]\033[0m \033[93mLong silence detected. Splitting into {len(segments)} segments to cut silence...\033[0m", flush=True)
+    print(f"\033[95m\033[1m ✂️  [clip/local]\033[0m \033[93mLong silence detected. Splitting into {len(segments)} segments to cut silence...\033[0m", flush=True)
     temp_files = []
     
     try:
@@ -598,7 +648,7 @@ def crop_highlights_local(
     results: List[Dict] = []
     for i, h in enumerate(highlights, 1):
         out_path = os.path.join(out_dir, f"short_{i:02d}.mp4")
-        print(f"\033[95m[clip/local] {i}/{len(highlights)}:\033[0m \033[1m{h.get('title', '(untitled)')}\033[0m", flush=True)
+        print(f"\n\033[95m\033[1m 🎬 [clip/local] {i}/{len(highlights)}:\033[0m \033[1m{h.get('title', '(untitled)')}\033[0m", flush=True)
         try:
             crop_clip_local(
                 source_path,
@@ -617,6 +667,6 @@ def crop_highlights_local(
             )
             results.append({**h, "clip_url": out_path})
         except Exception as e:
-            print(f"\033[95m[clip/local] {i} failed:\033[0m \033[91m{e}\033[0m", flush=True)
+            print(f"\033[91m\033[1m ❌ [clip/local] {i} failed:\033[0m \033[91m{e}\033[0m", flush=True)
             results.append({**h, "clip_url": None, "error": str(e)})
     return results
