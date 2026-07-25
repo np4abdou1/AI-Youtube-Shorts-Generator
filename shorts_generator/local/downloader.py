@@ -168,7 +168,15 @@ def download_youtube_local(video_url: str, fmt: str = "720", out_dir: Optional[s
     cmd.append(video_url)
     
     print(f"\033[96m\033[1m ⬇️  [download/local]\033[0m \033[1mDownloading via yt-dlp...\033[0m", flush=True)
-    subprocess.run(cmd, check=True)
+    try:
+        subprocess.run(cmd, check=True)
+    except subprocess.CalledProcessError:
+        if cookies_to_use and "--cookies" in cmd:
+            print("\033[96m\033[1m ⚠️  [download/local]\033[0m \033[93mCookie download failed. Retrying without cookies...\033[0m", flush=True)
+            cmd_nocookies = [c for i, c in enumerate(cmd) if c != "--cookies" and (i == 0 or cmd[i-1] != "--cookies")]
+            subprocess.run(cmd_nocookies, check=True)
+        else:
+            raise
     
     # Locate the downloaded file
     path = os.path.join(out_dir, f"source_{video_id}.mp4")

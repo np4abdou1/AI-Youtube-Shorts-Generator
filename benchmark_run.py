@@ -33,7 +33,9 @@ except Exception as e:
     import urllib.request
     source_path = "/content/output_test/source_sample.mp4"
     os.makedirs("/content/output_test", exist_ok=True)
-    urllib.request.urlretrieve(sample_url, source_path)
+    req = urllib.request.Request(sample_url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req) as resp, open(source_path, 'wb') as f:
+        f.write(resp.read())
 
 t_dl_end = time.time()
 download_time = t_dl_end - t_dl_start
