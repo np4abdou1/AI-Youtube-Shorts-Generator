@@ -35,7 +35,9 @@ def call_openai_llm(prompt: str) -> str:
         temperature=0.7,
         messages=[{"role": "user", "content": prompt}],
     )
-    return response.choices[0].message.content or ""
+    if hasattr(response, "choices") and response.choices:
+        return response.choices[0].message.content or ""
+    return ""
 
 
 def call_gemini_llm(prompt: str) -> str:
