@@ -28,14 +28,14 @@ t_dl_start = time.time()
 try:
     source_path = download_youtube_local(url, fmt="720")
 except Exception as e:
-    print(f"⚠️ YouTube direct download failed ({e}). Falling back to sample video URL for benchmark...", flush=True)
-    sample_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
-    import urllib.request
-    source_path = "/content/output_test/source_sample.mp4"
-    os.makedirs("/content/output_test", exist_ok=True)
-    req = urllib.request.Request(sample_url, headers={'User-Agent': 'Mozilla/5.0'})
-    with urllib.request.urlopen(req) as resp, open(source_path, 'wb') as f:
-        f.write(resp.read())
+    print(f"⚠️ YouTube direct download failed ({e}). Using sample video /content/sample.mp4 for benchmark...", flush=True)
+    source_path = "/content/sample.mp4"
+    if not os.path.exists(source_path):
+        import urllib.request
+        sample_url = "https://github.com/intel-iot-devkit/sample-videos/raw/master/face-demographics-walking-and-pause.mp4"
+        req = urllib.request.Request(sample_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as resp, open(source_path, 'wb') as f:
+            f.write(resp.read())
 
 t_dl_end = time.time()
 download_time = t_dl_end - t_dl_start
