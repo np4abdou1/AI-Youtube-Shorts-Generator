@@ -28,8 +28,8 @@ t_dl_start = time.time()
 try:
     source_path = download_youtube_local(url, fmt="720")
 except Exception as e:
-    print(f"⚠️ YouTube direct download failed ({e}). Using sample video /content/sample.mp4 for benchmark...", flush=True)
-    source_path = "/content/sample.mp4"
+    print(f"⚠️ YouTube direct download failed ({e}). Using uploaded speech sample video /content/sample_speech.mp4...", flush=True)
+    source_path = "/content/sample_speech.mp4"
     if not os.path.exists(source_path):
         import urllib.request
         sample_url = "https://github.com/intel-iot-devkit/sample-videos/raw/master/face-demographics-walking-and-pause.mp4"
