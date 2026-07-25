@@ -25,7 +25,16 @@ t0 = time.time()
 
 # Step 1: Download
 t_dl_start = time.time()
-source_path = download_youtube_local(url, fmt="720")
+try:
+    source_path = download_youtube_local(url, fmt="720")
+except Exception as e:
+    print(f"⚠️ YouTube direct download failed ({e}). Falling back to sample video URL for benchmark...", flush=True)
+    sample_url = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4"
+    import urllib.request
+    source_path = "/content/output_test/source_sample.mp4"
+    os.makedirs("/content/output_test", exist_ok=True)
+    urllib.request.urlretrieve(sample_url, source_path)
+
 t_dl_end = time.time()
 download_time = t_dl_end - t_dl_start
 print(f"⏱️ Step 1 (Download): {download_time:.2f}s", flush=True)
