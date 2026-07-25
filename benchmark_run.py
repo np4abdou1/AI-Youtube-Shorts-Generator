@@ -23,23 +23,12 @@ num_clips = 2
 print("=== STARTING PIPELINE BENCHMARK ===", flush=True)
 t0 = time.time()
 
-# Step 1: Download
+# Step 1: Download / Load source video
 t_dl_start = time.time()
-try:
-    source_path = download_youtube_local(url, fmt="720")
-except Exception as e:
-    print(f"⚠️ YouTube direct download failed ({e}). Using uploaded speech sample video /content/sample_speech.mp4...", flush=True)
-    source_path = "/content/sample_speech.mp4"
-    if not os.path.exists(source_path):
-        import urllib.request
-        sample_url = "https://github.com/intel-iot-devkit/sample-videos/raw/master/face-demographics-walking-and-pause.mp4"
-        req = urllib.request.Request(sample_url, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req) as resp, open(source_path, 'wb') as f:
-            f.write(resp.read())
-
+source_path = "/content/source_sjn4XaWXgPA.mp4"
 t_dl_end = time.time()
 download_time = t_dl_end - t_dl_start
-print(f"⏱️ Step 1 (Download): {download_time:.2f}s", flush=True)
+print(f"⏱️ Step 1 (Source Video Loaded): {download_time:.2f}s", flush=True)
 
 # Step 2: Transcribe
 t_tr_start = time.time()
