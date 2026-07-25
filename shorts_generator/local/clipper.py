@@ -151,7 +151,7 @@ def _draw_dynamic_captions(canvas, words: List[Dict], current_time: float, out_w
     current_x = start_x
     for idx, w in enumerate(window_words):
         word_text = w["word"].upper()
-        is_active = (start_win + idx == active_idx)
+        is_active = (chunk_start + idx == active_idx)
         color = (0, 255, 255) if is_active else (255, 255, 255)
         
         _draw_styled_text(
